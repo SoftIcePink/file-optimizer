@@ -73,3 +73,47 @@ Stores information about each file:
     }
   ]
 }
+
+## Doublons Collection
+
+Stores confirmed duplicates for quick access:
+
+```json
+{
+  "original_hash": "d41d8cd98f00b204e9800998ecf8427e",
+  "duplicates": [
+    "C:\\Backup\\example_copy.txt",
+    "C:\\Archive\\example_old.txt"
+  ]
+}
+```
+
+--
+
+## API Endpoints
+
+### File Metadata Endpoints
+
+- `POST` `/hash`: Hash a file and store metadata
+- `GET` `/files`: Fetch all files and their metadata
+- `GET` `/file/:hash` : Fetch details for a specific file by its hash
+
+### Doublons Endpoints
+
+- `GET` `/duplicated`: Fetch duplicate file groups
+- `DELETE` `/duplicates`: Remove duplicated from the database
+
+### Real-Time Updates
+
+- WebSocket endpoint: `ws://<server>/updates`
+
+--
+
+## Setup Instructions
+
+### Backend
+1. Install dependencies: `npm install`
+2. Setup MongoDB
+3. Run the backend : `npm run start` or any other script
+
+### Frontend
