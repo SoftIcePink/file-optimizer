@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label"
 
 interface FileUploaderProps {
   onUpload: (file: File) => void
+  currentDirectory: string
 }
 
-export default function FileUploader({ onUpload }: FileUploaderProps) {
+export default function FileUploader({ onUpload, currentDirectory }: FileUploaderProps) {
   const [file, setFile] = useState<File | null>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -29,7 +30,7 @@ export default function FileUploader({ onUpload }: FileUploaderProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid w-full max-w-sm items-center gap-1.5">
-        <Label htmlFor="file">Choose a file</Label>
+        <Label htmlFor="file">Choose a file to upload to {currentDirectory}</Label>
         <Input
           id="file"
           type="file"

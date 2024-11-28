@@ -3,29 +3,32 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import FileUploader from './FileUploader'
-import FileList from './FileList'
-import SystemStorage from './SystemStorage'
-import FolderVerifier from './FolderVerifier'
+import FileUploader from '@/components/FileUploader'
+import FileExplorer from '@/components/FileExplorer'
+import SystemStorage from '@/components/SystemStorage'
+import FolderVerifier from '@/components/FolderVerifier'
 import { FileData, VerificationResult } from '@/types/file'
 
 export default function FileManager() {
   const [files, setFiles] = useState<FileData[]>([])
+  const [directories, setDirectories] = useState<string[]>([])
+  const [currentDirectory, setCurrentDirectory] = useState<string>('/')
   const [systemFiles, setSystemFiles] = useState<string[]>([])
   const [verificationResults, setVerificationResults] = useState<VerificationResult[]>([])
   const [jsonFilePath, setJsonFilePath] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchFiles()
+    fetchFiles(currentDirectory)
     fetchSystemFiles()
-  }, [])
+  }, [currentDirectory])
 
-  const fetchFiles = async () => {
+  const fetchFiles = async (directory: string) => {
     try {
-      const response = await fetch('/api/files')
+      const response = await fetch(`/api/files?directory=${encodeURIComponent(directory)}`)
       if (!response.ok) throw new Error('Failed to fetch files')
       const data = await response.json()
-      setFiles(data)
+      setFiles(data.files)
+      setDirectories(data.directories)
     } catch (error) {
       console.error('Error fetching files:', error)
     }
@@ -36,10 +39,10 @@ export default function FileManager() {
       const response = await fetch('/api/system-files');
       if (!response.ok) throw new Error('Failed to fetch system files');
       const data = await response.json();
-      setSystemFiles(data.files); // Only use the `files` array
+      setSystemFiles(data.files);
     } catch (error) {
       console.error('Error fetching system files:', error);
-      setSystemFiles([]); // Ensure it's always an array
+      setSystemFiles([]);
     }
   }  
 
@@ -47,6 +50,7 @@ export default function FileManager() {
     try {
       const formData = new FormData()
       formData.append('file', file)
+      formData.append('directory', currentDirectory)
 
       const response = await fetch('/api/files', {
         method: 'POST',
@@ -55,7 +59,7 @@ export default function FileManager() {
 
       if (!response.ok) throw new Error('Failed to upload file')
 
-      await fetchFiles()
+      await fetchFiles(currentDirectory)
     } catch (error) {
       console.error('Error uploading file:', error)
     }
@@ -69,7 +73,7 @@ export default function FileManager() {
 
       if (!response.ok) throw new Error('Failed to delete file')
 
-      await fetchFiles()
+      await fetchFiles(currentDirectory)
     } catch (error) {
       console.error('Error deleting file:', error)
     }
@@ -87,7 +91,7 @@ export default function FileManager() {
 
       if (!response.ok) throw new Error('Failed to update file')
 
-      await fetchFiles()
+      await fetchFiles(currentDirectory)
     } catch (error) {
       console.error('Error updating file:', error)
     }
@@ -119,18 +123,25 @@ export default function FileManager() {
         <CardTitle>File Manager</CardTitle>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="upload" className="space-y-4">
+        <Tabs defaultValue="explorer" className="space-y-4">
           <TabsList>
+            <TabsTrigger value="explorer">Explorer</TabsTrigger>
             <TabsTrigger value="upload">Upload</TabsTrigger>
-            <TabsTrigger value="files">Files</TabsTrigger>
             <TabsTrigger value="system">System</TabsTrigger>
             <TabsTrigger value="verify">Verify</TabsTrigger>
           </TabsList>
-          <TabsContent value="upload">
-            <FileUploader onUpload={handleFileUpload} />
+          <TabsContent value="explorer">
+            <FileExplorer
+              files={files}
+              directories={directories}
+              currentDirectory={currentDirectory}
+              onDirectoryChange={setCurrentDirectory}
+              onDelete={handleDeleteFile}
+              onUpdate={handleUpdateFile}
+            />
           </TabsContent>
-          <TabsContent value="files">
-            <FileList files={files} onDelete={handleDeleteFile} onUpdate={handleUpdateFile} />
+          <TabsContent value="upload">
+            <FileUploader onUpload={handleFileUpload} currentDirectory={currentDirectory} />
           </TabsContent>
           <TabsContent value="system">
             <SystemStorage files={systemFiles} />
@@ -143,4 +154,3 @@ export default function FileManager() {
     </Card>
   )
 }
-

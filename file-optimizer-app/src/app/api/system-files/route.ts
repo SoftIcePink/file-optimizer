@@ -76,34 +76,52 @@ async function estimateTotalFiles(dir: string): Promise<number> {
   console.log(`Total files estimated: ${count}`);
   return count;
 }
+
 async function scanDirectory(rootDir: string, db: any, totalFiles: number): Promise<ScanResult> {
   const result: ScanResult = { filesScanned: 0, filesBypassed: 0, inaccessible: [], timeTaken: '' };
   const stack: string[] = [rootDir];
-  const scannedPaths = new Set<string>(); // Tracks already scanned paths
   let processedFiles = 0;
 
   while (stack.length > 0) {
     const dir = stack.pop();
-    if (!dir || scannedPaths.has(dir)) continue; // Skip if already scanned
-
-    scannedPaths.add(dir); // Mark this directory as scanned
+    if (!dir) continue;
 
     try {
+      const dirStats = await fs.stat(dir);
+
+      // Check if directory has already been scanned
+      const existingDir = await db.collection('scanned_directories').findOne({ path: dir });
+
+      if (existingDir && new Date(existingDir.last_scanned) >= dirStats.mtime) {
+        console.log(`Skipping already scanned directory: ${dir}`);
+        continue; // Skip this directory
+      }
+
+      // Update the last scanned time for this directory
+      await db.collection('scanned_directories').updateOne(
+        { path: dir },
+        { $set: { path: dir, last_scanned: new Date() } },
+        { upsert: true }
+      );
+
       const entries = await fs.readdir(dir, { withFileTypes: true });
 
       for (const entry of entries) {
         const fullPath = path.resolve(dir, entry.name);
 
-        if (scannedPaths.has(fullPath)) {
-          continue; // Skip if already scanned
-        }
-
         try {
+          const entryStats = await fs.stat(fullPath);
+
           if (entry.isDirectory()) {
-            stack.push(fullPath);
+            stack.push(fullPath); // Add subdirectory to stack
           } else {
-            // Get file stats
-            const fileStats = await fs.stat(fullPath);
+            // Check if the file has already been scanned
+            const existingFile = await db.collection('files').findOne({ file_path: fullPath });
+
+            if (existingFile && new Date(existingFile.last_modified) >= entryStats.mtime) {
+              console.log(`Skipping already scanned file: ${fullPath}`);
+              continue; // Skip this file
+            }
 
             // Generate hash using a stream for large files
             const hash = await generateFileHash(fullPath);
@@ -114,8 +132,8 @@ async function scanDirectory(rootDir: string, db: any, totalFiles: number): Prom
               {
                 $set: {
                   hash,
-                  file_size: fileStats.size,
-                  last_modified: fileStats.mtime,
+                  file_size: entryStats.size,
+                  last_modified: entryStats.mtime,
                 },
               },
               { upsert: true }
@@ -123,7 +141,6 @@ async function scanDirectory(rootDir: string, db: any, totalFiles: number): Prom
 
             result.filesScanned++;
             processedFiles++;
-            scannedPaths.add(fullPath); // Mark this file as scanned
             console.log(`[${((processedFiles / totalFiles) * 100).toFixed(2)}%] Scanned: ${fullPath}`);
           }
         } catch (fileError: any) {
@@ -135,11 +152,11 @@ async function scanDirectory(rootDir: string, db: any, totalFiles: number): Prom
             fileError.code === 'ELOOP' ||
             fileError.code === 'EBUSY'
           ) {
-            console.warn(`Permission denied: ${fullPath}`);
+            //console.warn(`Permission denied: ${fullPath}`);
             result.filesBypassed++;
             result.inaccessible.push(fullPath);
           } else if (fileError.code === 'ERR_FS_FILE_TOO_LARGE') {
-            console.warn(`File too large to process: ${fullPath}`);
+            //console.warn(`File too large to process: ${fullPath}`);
             result.filesBypassed++;
             result.inaccessible.push(fullPath);
           } else {
@@ -156,7 +173,7 @@ async function scanDirectory(rootDir: string, db: any, totalFiles: number): Prom
         dirError.code === 'ELOOP' ||
         dirError.code === 'EBUSY'
       ) {
-        console.warn(`Permission denied: ${dir}`);
+        //console.warn(`Permission denied: ${dir}`);
         result.filesBypassed++;
         result.inaccessible.push(dir);
       } else {
@@ -167,6 +184,7 @@ async function scanDirectory(rootDir: string, db: any, totalFiles: number): Prom
 
   return result;
 }
+
 
 
 // Helper function to calculate file hash using a stream
