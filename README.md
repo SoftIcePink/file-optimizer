@@ -1,119 +1,128 @@
-# File Duplication Detection Service
+# Rust File Scanner and Metadata Uploader
 
-This service identifies duplicate files (doublons) on your system by hashing file contents and comparing them to previously hashed files. It provides a backend API to manage the duplication detection process and a frontend interface to display results.
+This Rust application scans a directory for all files, computes their metadata (such as file size, SHA-256 hash, and last modified time), and stores the information in a MongoDB database.
 
 ---
 
 ## Features
 
-1. **File Hashing**:
-   - Uses fast hashing algorithms (e.g., Blake3 or SHA-256).
-   - Supports chunk-based hashing for large files.
-
-2. **Database Integration**:
-   - Stores file metadata and hashes in a MongoDB database.
-   - Tracks duplicates (doublons) efficiently with indexed queries.
-
-3. **Real-Time Updates**:
-   - Uses WebSockets to notify the frontend of file changes or new duplicates.
-
-4. **Frontend Interface**:
-   - Provides an interactive dashboard to view and manage duplicate files.
-   - Supports filtering, sorting, and searching for files.
+- **Recursive File Scanning**: Scans directories and subdirectories for all files.
+- **File Metadata Extraction**: Extracts details like file size, last modified timestamp, and directory.
+- **SHA-256 Hashing**: Generates a unique hash for each file (currently based on the file path).
+- **MongoDB Integration**: Uploads metadata to a MongoDB database for efficient storage and retrieval.
 
 ---
 
-## Architecture Overview
+## Prerequisites
 
-### **Backend**
-- **Language**: Node.js (JavaScript/TypeScript) or Go
-- **Framework**: 
-  - Node.js: [NestJS](https://nestjs.com/) or [Express.js](https://expressjs.com/)
-  - Go: [Gin](https://gin-gonic.com/) or [Fiber](https://gofiber.io/)
-- **Database**: MongoDB
-- **Features**:
-  - Scans files, hashes them, and stores metadata.
-  - Provides a REST/GraphQL API to serve results.
-  - Implements WebSockets for real-time updates.
-
-### **Frontend**
-- **Framework**: [React.js](https://reactjs.org/) or [Next.js](https://nextjs.org/)
-- **Features**:
-  - Dynamic table view for duplicates.
-  - Search, filter, and sort functionality.
-  - Real-time UI updates via WebSockets.
+1. **Rust**: Install Rust from [rust-lang.org](https://www.rust-lang.org/).
+2. **MongoDB**: Install MongoDB or use a Docker container:
+   ```bash
+   docker run --name mongodb -d -p 27017:27017 mongo:latest
+   ```
+3. **Dependencies**: Add these to your `Cargo.toml`:
+   ```toml
+   [dependencies]
+   walkdir = "2.4"
+   mongodb = "2.4"
+   sha2 = "0.10"
+   tokio = { version = "1", features = ["full"] }
+   ```
 
 ---
 
-## Technical Stack
+## Installation and Setup
 
-| **Component**         | **Technology**                       | **Purpose**                                     |
-|------------------------|---------------------------------------|------------------------------------------------|
-| **Backend**            | Node.js or Go                        | File hashing, API, and database interaction     |
-| **Database**           | MongoDB                              | Store file hashes and metadata                 |
-| **Frontend**           | React.js or Next.js                  | User interface to display and manage results   |
-| **Real-Time Updates**  | WebSockets (Socket.IO or Go-native)  | Notify frontend about duplicates in real-time  |
+1. Clone the repository or create a new Rust project:
+   ```bash
+   cargo new file_scanner
+   cd file_scanner
+   ```
+
+2. Add dependencies to `Cargo.toml` (see above).
+
+3. Copy the application code into your `main.rs` file.
+
+4. Build the project:
+   ```bash
+   cargo build
+   ```
+
+---
+
+## Usage
+
+1. Ensure MongoDB is running locally on `localhost:27017`.
+2. Run the application:
+   ```bash
+   cargo run
+   ```
+
+3. The application will:
+   - Scan the directory `C:\` (you can change it in the code).
+   - Extract file metadata.
+   - Insert the metadata into the MongoDB `fileOptimizer.files_rust` collection.
 
 ---
 
 ## Database Schema
 
-### **File Metadata Collection**
-Stores information about each file:
+### MongoDB Collection: `files_rust`
+
+Each document contains:
+
+| Field            | Type      | Description                          |
+|-------------------|-----------|--------------------------------------|
+| `file_path`       | `String`  | Absolute path of the file.           |
+| `file_hash`       | `String`  | SHA-256 hash (currently file path).  |
+| `file_size`       | `Int64`   | File size in bytes.                  |
+| `last_modified`   | `Int64`   | Last modified timestamp (Unix time). |
+| `file_directory`  | `String`  | Parent directory path.               |
+
+Example document:
 ```json
 {
-  "hash": "d41d8cd98f00b204e9800998ecf8427e",
-  "file_path": "C:\\Users\\User\\Documents\\example.txt",
-  "last_modified": "2024-11-27T12:34:56Z",
+  "file_path": "C:\\example\\file.txt",
+  "file_hash": "d2d2d2d2d2d2d2...",
   "file_size": 1024,
-  "duplicates": [
-    {
-      "file_path": "C:\\Backup\\example_copy.txt",
-      "last_modified": "2024-11-26T10:20:30Z"
-    }
-  ]
-}
-
-## Doublons Collection
-
-Stores confirmed duplicates for quick access:
-
-```json
-{
-  "original_hash": "d41d8cd98f00b204e9800998ecf8427e",
-  "duplicates": [
-    "C:\\Backup\\example_copy.txt",
-    "C:\\Archive\\example_old.txt"
-  ]
+  "last_modified": 1693425243,
+  "file_directory": "C:\\example"
 }
 ```
 
---
+---
 
-## API Endpoints
+## Notes
 
-### File Metadata Endpoints
+1. **Hashing File Content**: The application currently uses the file path for hashing. To hash the actual file content, replace the `compute_file_hash` function with this:
+   ```rust
+   fn compute_file_hash(path: &str) -> String {
+       let mut file = fs::File::open(path).expect("Failed to open file");
+       let mut hasher = Sha256::new();
+       std::io::copy(&mut file, &mut hasher).expect("Failed to hash file content");
+       format!("{:x}", hasher.finalize())
+   }
+   ```
+2. **Directory to Scan**: Update the `root` variable in the code to change the directory.
 
-- `POST` `/hash`: Hash a file and store metadata
-- `GET` `/files`: Fetch all files and their metadata
-- `GET` `/file/:hash` : Fetch details for a specific file by its hash
+---
 
-### Doublons Endpoints
+## Future Improvements
 
-- `GET` `/duplicated`: Fetch duplicate file groups
-- `DELETE` `/duplicates`: Remove duplicated from the database
+- Hash file content instead of the file path.
+- Add error handling for file and database operations.
+- Optimize database queries for duplicate detection.
 
-### Real-Time Updates
+---
 
-- WebSocket endpoint: `ws://<server>/updates`
+## License
 
---
+This project is open-source and available under the [MIT License](LICENSE).
 
-## Setup Instructions
+---
 
-### Backend
-1. Install dependencies: `npm install`
-2. Setup MongoDB
-3. Run the backend : `npm run start` or any other script
+## Acknowledgments
 
-### Frontend
+- Rust ecosystem and its amazing community.
+- MongoDB for the database backend.
+- OpenAI for helpful insights and code snippets.

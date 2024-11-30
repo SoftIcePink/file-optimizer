@@ -1,116 +1,148 @@
-import { useState } from 'react'
-import { FileData } from '@/types/file'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Folder, File, ArrowLeft } from 'lucide-react'
+'use client';
 
-interface FileExplorerProps {
-  files: FileData[]
-  directories: string[]
-  currentDirectory: string
-  onDirectoryChange: (directory: string) => void
-  onDelete: (hash: string) => void
-  onUpdate: (hash: string, newData: Partial<FileData>) => void
-}
+import React, { useState, useEffect } from 'react';
+import DuplicateFiles from '@/components/DuplicateFiles';
+import FileItem from '@/components/FileItem';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { File } from '@/types/file';
 
-export default function FileExplorer({
-  files,
-  directories,
-  currentDirectory,
-  onDirectoryChange,
-  onDelete,
-  onUpdate
-}: FileExplorerProps) {
-  const [editingHash, setEditingHash] = useState<string | null>(null)
-  const [editedName, setEditedName] = useState('')
+const CHUNK_SIZE = 20; // Number of files to render at a time
 
-  const handleEdit = (file: FileData) => {
-    setEditingHash(file.hash)
-    setEditedName(file.file_path)
-  }
+const FileExplorer: React.FC = () => {
+  const [files, setFiles] = useState<File[]>([]);
+  const [renderedFiles, setRenderedFiles] = useState<File[]>([]);
+  const [sortBy, setSortBy] = useState<'hash' | 'path'>('hash');
+  const [error, setError] = useState<string | null>(null);
+  const [chunkIndex, setChunkIndex] = useState(0); // Tracks which chunk to render next
 
-  const handleSave = (hash: string) => {
-    onUpdate(hash, { file_path: editedName })
-    setEditingHash(null)
-  }
+  useEffect(() => {
+    const fetchFiles = async () => {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_RUST_API_URL}/api/files`);
+        if (!response.ok) throw new Error(`Error fetching files: ${response.statusText}`);
 
-  const handleDirectoryClick = (directory: string) => {
-    onDirectoryChange(directory)
-  }
+        const data = await response.json();
+        setFiles(data);
+        setRenderedFiles(data.slice(0, CHUNK_SIZE)); // Render initial chunk
+      } catch (error: any) {
+        setError(error.message);
+      }
+    };
 
-  const handleBackClick = () => {
-    const parentDirectory = currentDirectory.split('/').slice(0, -1).join('/') || '/'
-    onDirectoryChange(parentDirectory)
+    fetchFiles();
+  }, []);
+
+  useEffect(() => {
+    // Append the next chunk of files when `chunkIndex` changes
+    const nextChunk = files.slice(0, (chunkIndex + 1) * CHUNK_SIZE);
+    setRenderedFiles(nextChunk);
+  }, [chunkIndex, files]);
+
+  const loadMoreFiles = () => {
+    // Increment chunk index to load more files
+    if (chunkIndex * CHUNK_SIZE < files.length) {
+      setChunkIndex((prev) => prev + 1);
+    }
+  };
+
+  const sortedFiles = React.useMemo(() => {
+    return [...renderedFiles].sort((a, b) =>
+      sortBy === 'hash'
+        ? a.file_hash.localeCompare(b.file_hash)
+        : a.file_path.localeCompare(b.file_path)
+    );
+  }, [renderedFiles, sortBy]);
+
+  const groupedFiles = React.useMemo(() => {
+    return sortedFiles.reduce((acc, file) => {
+      const key = sortBy === 'hash' ? file.file_hash : file.file_directory;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(file);
+      return acc;
+    }, {} as Record<string, File[]>);
+  }, [sortedFiles, sortBy]);
+
+  const duplicateFiles = React.useMemo(() => {
+    return Object.values(groupedFiles).filter((group) => group.length > 1);
+  }, [groupedFiles]);
+
+  if (error) {
+    return (
+      <Card className="w-full max-w-4xl mx-auto">
+        <CardHeader>
+          <CardTitle>Error</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-red-500">Failed to load files: {error}</p>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
-    <div>
-      <div className="mb-4 flex items-center">
-        <Button onClick={handleBackClick} variant="outline" size="sm" className="mr-2">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back
-        </Button>
-        <span className="text-sm text-muted-foreground">{currentDirectory}</span>
-      </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[30px]"></TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Size</TableHead>
-            <TableHead>Last Modified</TableHead>
-            <TableHead>Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {directories.map((directory) => (
-            <TableRow key={directory} className="cursor-pointer hover:bg-muted/50" onClick={() => handleDirectoryClick(directory)}>
-              <TableCell><Folder className="h-4 w-4" /></TableCell>
-              <TableCell colSpan={4}>{directory.split('/').pop()}</TableCell>
-            </TableRow>
-          ))}
-          {files.map((file) => (
-            <TableRow key={file.hash}>
-              <TableCell><File className="h-4 w-4" /></TableCell>
-              <TableCell>
-                {editingHash === file.hash ? (
-                  <Input
-                    value={editedName}
-                    onChange={(e) => setEditedName(e.target.value)}
-                  />
-                ) : (
-                  file.file_path.split('/').pop()
-                )}
-              </TableCell>
-              <TableCell>{formatFileSize(file.file_size)}</TableCell>
-              <TableCell>{new Date(file.last_modified).toLocaleString()}</TableCell>
-              <TableCell>
-                {editingHash === file.hash ? (
-                  <Button onClick={() => handleSave(file.hash)} variant="outline" size="sm">
-                    Save
-                  </Button>
-                ) : (
-                  <Button onClick={() => handleEdit(file)} variant="outline" size="sm">
-                    Edit
-                  </Button>
-                )}
-                <Button onClick={() => onDelete(file.hash)} variant="destructive" size="sm" className="ml-2">
-                  Delete
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  )
-}
+    <Card className="w-full max-w-4xl mx-auto">
+      <CardHeader>
+        <CardTitle>File Explorer</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Tabs defaultValue="hash">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="hash" onClick={() => setSortBy('hash')}>
+              Sort by Hash
+            </TabsTrigger>
+            <TabsTrigger value="path" onClick={() => setSortBy('path')}>
+              Sort by Path
+            </TabsTrigger>
+            <TabsTrigger value="duplicates">Duplicate Files</TabsTrigger>
+          </TabsList>
+          <TabsContent value="hash">
+            <RenderGroupedFiles groupedFiles={groupedFiles} />
+            {chunkIndex * CHUNK_SIZE < files.length && (
+              <button
+                onClick={loadMoreFiles}
+                className="mt-4 p-2 bg-blue-500 text-white rounded"
+              >
+                Load More Files
+              </button>
+            )}
+          </TabsContent>
+          <TabsContent value="path">
+            <RenderGroupedFiles groupedFiles={groupedFiles} />
+            {chunkIndex * CHUNK_SIZE < files.length && (
+              <button
+                onClick={loadMoreFiles}
+                className="mt-4 p-2 bg-blue-500 text-white rounded"
+              >
+                Load More Files
+              </button>
+            )}
+          </TabsContent>
+          <TabsContent value="duplicates">
+            <DuplicateFiles duplicateFiles={duplicateFiles} />
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
+};
 
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 Bytes'
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
+const RenderGroupedFiles: React.FC<{ groupedFiles: Record<string, File[]> }> = ({
+  groupedFiles,
+}) => {
+  return (
+    <ScrollArea className="h-[600px]">
+      {Object.entries(groupedFiles).map(([key, groupFiles]) => (
+        <div key={key} className="mb-6">
+          <h2 className="text-xl font-semibold mb-2">Group: {key}</h2>
+          {groupFiles.map((file) => (
+            <FileItem key={file.file_path} file={file} />
+          ))}
+        </div>
+      ))}
+    </ScrollArea>
+  );
+};
 
+export default FileExplorer;

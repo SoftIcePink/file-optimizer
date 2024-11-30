@@ -131,3 +131,5 @@ dist
 
 # Target from rust
 /file-optimizer-rust/target*
+
+*/target

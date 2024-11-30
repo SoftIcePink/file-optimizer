@@ -38,3 +38,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# lib mongo-c
+*/mongo-c-driver/*
+*\file-optimizer-c\mongo-c-driver-1.29.0
