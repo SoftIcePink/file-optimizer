@@ -1,0 +1,10 @@
+[package]
+name = "file-optimizer-rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+walkdir = "2.4"      # For walking directories
+mongodb = "2.4"      # MongoDB driver
+sha2 = "0.10"        # SHA-2 hashing
+tokio = { version = "1", features = ["full"] } # Needed for async runtime with MongoDB
