@@ -130,4 +130,4 @@ dist
 .pnp.*
 
 # Target from rust
-*/target*
+/file-optimizer-rust/target*
