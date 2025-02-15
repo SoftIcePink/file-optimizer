@@ -1,4 +1,17 @@
-# Rust File Scanner and Metadata Uploader
+# Quick retrospective on this project
+This was a 1-week project I put in place with total ~36h to 42h active work on it.
+Since I'm a very lazy person, my goal was to create an app that would help me clean up duplicate files on some of my PC and index them.
+Some apps already do that, but at that time I already had an idea in my head and a plan.
+
+I usually code in C#, but this time I wanted to learn while doing something. My goal went from creating a useful app to learning and challenging myself.
+
+Fast forward a few hours and I now had built a python version, rust version, tried to do a go version (didn't push it) and a Node.js (more of a NextJs version but it went wrong at some point).
+
+They all worked, but beware that you're database will fill up if you're not using any safety precaution such as limit size of db. I ended up filling my drives to the brim and my PC couldn't boot (had to use a live usb and delete manually some files) 
+
+--
+
+# File Scanner and Metadata Uploader
 
 This Rust application scans a directory for all files, computes their metadata (such as file size, SHA-256 hash, and last modified time), and stores the information in a MongoDB database.
 
